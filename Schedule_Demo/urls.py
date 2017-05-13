@@ -20,6 +20,10 @@ from Demo import views
 
 urlpatterns = [
     url(r'^admin/', admin.site.urls),
-    url(r'^login', TemplateView.as_view(template_name='Demo/sign-in.html')),
+    url(r'^customer', views.CustomerSignInView.as_view(), name='customer_login'),
+    url(r'^salesman', views.SalesmanSignInView.as_view(), name='salesman_login'),
+    url(r'^login/([0-1])', views.login, name='login'),
+    url(r'^login', TemplateView.as_view(template_name='Demo/login_redirect.html'), name='login-redirect'),
+    url(r'^logout', views.logout, name='logout'),
     url(r'^home', views.home, name='home'),
 ]

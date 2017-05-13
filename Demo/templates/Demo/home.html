@@ -1,3 +1,4 @@
+{% load staticfiles %}
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -5,9 +6,38 @@
     <meta http-equiv="X-UA-COMPATIBLE" content="IE=edge">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>ScheduleDemo | Homepage</title>
-    <link rel="stylesheet" href="css/bootstrap.css">
+    <link rel="stylesheet" href="{% static 'css/bootstrap.css' %}">
+    <meta name="google-signin-client_id"
+          content="326805507721-q9kmmtktvqjqsjfdmif836ih2njis70o.apps.googleusercontent.com">
+
 </head>
 <body>
+<script>
+    function signOut() {
+        var auth2 = gapi.auth2.getAuthInstance();
+        auth2.signOut().then(function () {
+            console.log('User signed out.');
+        });
+    }
 
+    function initGapi() {
+        gapi.load('auth2', function () {
+            gapi.auth2.init();
+        });
+    }
+</script>
+<div class="container">
+    <div class="row">
+        <p class="col-xs-4">Welcome!! {{ user.name }}</p>
+        <a class="btn btn-danger col-xs-2 col-xs-offset-6" href="{% url 'logout' %}" onclick="signOut();">Sign out</a>
+    </div>
+    <div class="row">
+        <div class="col-xs-12 text-center">
+            Below is the list of your schedules
+        </div>
+    </div>
+</div>
+<script src="https://apis.google.com/js/platform.js?onload=initGapi" async defer></script>
 </body>
+
 </html>

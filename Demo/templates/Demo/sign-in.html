@@ -17,6 +17,8 @@
 <div class="text-center">
     <div style="display: inline-block" class="g-signin2" data-onsuccess="onSignIn"></div>
 </div>
+
+
 <script>
     function onSignIn(googleUser) {
         var profile = googleUser.getBasicProfile();
@@ -24,9 +26,14 @@
         data['name'] = profile.getName();
         data['img_url'] = profile.getImageUrl();
         data['email'] = profile.getEmail();
+        data['password'] = profile.getId();
         var form = document.createElement("form");
         form.setAttribute("method", "post");
-        form.setAttribute("action", "http://localhost:8000/home");
+        {% if is_salesman %}
+            form.setAttribute("action", "http://localhost:8000/login/1");
+        {% else %}
+            form.setAttribute("action", "http://localhost:8000/login/0");
+        {% endif %}
         form.innerHTML = "{% csrf_token %}";
         for (var key in data) {
             if (data.hasOwnProperty(key)) {
