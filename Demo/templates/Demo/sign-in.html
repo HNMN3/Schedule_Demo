@@ -1,0 +1,47 @@
+{% load staticfiles %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta http-equiv="X-UA-COMPATIBLE" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Schedule A Demo</title>
+    <link rel="stylesheet" href="{% static 'css/bootstrap.css' %}">
+    <script src="https://apis.google.com/js/platform.js" async defer></script>
+    <meta name="google-signin-client_id"
+          content="326805507721-q9kmmtktvqjqsjfdmif836ih2njis70o.apps.googleusercontent.com">
+
+</head>
+<body>
+<h3 class="text-center">Welcome! Please login with your google account to continue!!</h3>
+<div class="text-center">
+    <div style="display: inline-block" class="g-signin2" data-onsuccess="onSignIn"></div>
+</div>
+<script>
+    function onSignIn(googleUser) {
+        var profile = googleUser.getBasicProfile();
+        var data = {};
+        data['name'] = profile.getName();
+        data['img_url'] = profile.getImageUrl();
+        data['email'] = profile.getEmail();
+        var form = document.createElement("form");
+        form.setAttribute("method", "post");
+        form.setAttribute("action", "http://localhost:8000/home");
+        form.innerHTML = "{% csrf_token %}";
+        for (var key in data) {
+            if (data.hasOwnProperty(key)) {
+                var form_field = document.createElement("input");
+                form_field.setAttribute("type", "hidden");
+                form_field.setAttribute("name", key);
+                form_field.setAttribute("value", data[key]);
+
+                form.appendChild(form_field);
+            }
+        }
+
+        document.body.appendChild(form);
+        form.submit();
+    }
+</script>
+</body>
+</html>
