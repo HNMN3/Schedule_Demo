@@ -17,7 +17,13 @@
 <div class="text-center">
     <div style="display: inline-block" class="g-signin2" data-onsuccess="onSignIn"></div>
 </div>
-
+<p class="text-center">
+    {% if is_salesman %}
+        Are you a customer? Sign In as <a href="{% url 'customer_login' %}">Customer</a>
+    {% else %}
+        Are you a Salesman? Sign In as <a href="{% url 'salesman_login' %}">Salesman</a>
+    {% endif %}
+</p>
 
 <script>
     var isLoggedInWithGoogle = false;
@@ -32,9 +38,9 @@
         form.innerHTML = "{% csrf_token %}"
         form.setAttribute("method", "post");
         {% if is_salesman %}
-            form.setAttribute("action", "http://localhost:8000/login/1");
+            form.setAttribute("action", "{% url 'login' 1 %}");
         {% else %}
-            form.setAttribute("action", "http://localhost:8000/login/0");
+            form.setAttribute("action", "{% url 'login' 0 %}");
         {% endif %}
         for (var key in data) {
             if (data.hasOwnProperty(key)) {

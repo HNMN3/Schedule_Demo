@@ -7,13 +7,112 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Schedule_Demo</title>
     <link rel="stylesheet" href="{% static 'css/bootstrap.css' %}">
+    <style>
+        .row {
+            margin-top: 10px;
+        }
+    </style>
+
 </head>
 <body>
-<form class="text-center" action="{% url 'schedule-demo' %}" method="post">
-    {% csrf_token %}
-    {{ form.as_table }}
+<div class="container">
+    <div class="row">
+        <div class="col-xs-12">
+            <h3 class="text-center">--- Select the date and timezone to view available slots for demo ---</h3>
+        </div>
+    </div>
+    <div class="row">
+        <form id="page-form" class="col-xs-12 text-center" action="{% url 'get-available-slots' %}" method="post">
+            {% csrf_token %}
+            {{ form.as_table }}
+            <button type="submit" class="btn btn-primary">View Available Time Slots</button>
+            |
+            <a href="{% url 'home' %}" class="btn btn-danger">Cancel</a>
+        </form>
 
-    <button class="btn btn-primary">View Availability</button>
-</form>
+    </div>
+    <div id="time-slots" class="row text-center">
+
+    </div>
+    <div class="row">
+        <p class="text-right">
+            ** Click On the any time slot to schedule a Demo!!
+        </p>
+    </div>
+</div>
+<script>
+    var isSelected = [];
+    {% for foo in availability %}
+        {% if foo %}
+            isSelected.push(true);
+        {% else %}
+            isSelected.push(false);
+        {% endif %}
+    {% endfor %}
+    var date = document.getElementById("id_date").value.split('-');
+    console.log(date);
+    var year = date[0];
+    var month = date[1];
+    var day = date[2];
+
+    var hour = '00';
+    var min = '00';
+
+    var time = new Date(year, month, day, hour, min);
+    console.log(time);
+    slots = document.getElementById('time-slots');
+    var noSlotAvailable = true;
+    for (var i = 0; i < 48; i++) {
+        if (!isSelected[i]) {
+            time.setMinutes(time.getMinutes() + 30);
+            continue;
+        }
+        /* Showing only that time slot in which some salesman is available*/
+        var a = document.createElement('a');
+        a.setAttribute("class", "col-xs-3 btn btn-default");
+        a.setAttribute("index", i.toString());
+        a.setAttribute("onclick", "scheduleDemo(this);");
+        addTime(a, time);
+        a.innerHTML += " - ";
+        time.setMinutes(time.getMinutes() + 30);
+        addTime(a, time);
+        slots.appendChild(a);
+        noSlotAvailable = false;
+    }
+    if (noSlotAvailable) {
+        var h3 = document.createElement("h3");
+        h3.setAttribute('class', 'text-center');
+        h3.innerHTML = "Sorry! no time slots available for this date, Please try another!! ";
+        slots.appendChild(h3);
+    }
+    function addTime(a, time) {
+        if (time.getHours() < 10)
+            a.innerHTML += "0";
+        a.innerHTML += time.getHours() + ":" + time.getMinutes();
+        if (time.getMinutes() < 10)
+            a.innerHTML += "0";
+    }
+
+    function scheduleDemo(node) {
+        var form = document.createElement("form");
+        form.innerHTML = "{% csrf_token %}";
+        form.setAttribute("method", "post");
+        form.setAttribute("action", "{% url 'schedule-demo' %}");
+
+        var form_field1 = document.createElement("input");
+        form_field1.setAttribute("type", "hidden");
+        form_field1.setAttribute("name", "index");
+        form_field1.setAttribute("value", node.getAttribute("index"));
+        form.appendChild(form_field1);
+
+        var form_field2 = document.createElement("input");
+        form_field2.setAttribute("type", "hidden");
+        form_field2.setAttribute("name", "date");
+        form_field2.setAttribute("value", document.getElementById("id_date").value);
+        form.appendChild(form_field2);
+        document.body.appendChild(form);
+        form.submit();
+    }
+</script>
 </body>
 </html>

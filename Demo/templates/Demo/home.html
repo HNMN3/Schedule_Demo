@@ -1,4 +1,7 @@
+{#This is frontend and things are self-explanatory here.#}
+
 {% load staticfiles %}
+{% load demo_tags %}
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -10,9 +13,14 @@
     <meta name="google-signin-client_id"
           content="326805507721-q9kmmtktvqjqsjfdmif836ih2njis70o.apps.googleusercontent.com">
     <style>
-        a {
+        a.btn {
             margin-right: 2px;
         }
+
+        .row {
+            margin-top: 10px;
+        }
+
     </style>
 </head>
 <body>
@@ -34,17 +42,45 @@
     <div class="row">
         <h4 class="col-xs-7">Welcome!! {{ user.name }}</h4>
         {% if user.is_salesman %}
-            <a href="{% url 'set-availability' %}" class="btn bg-primary col-xs-2">Change Availability</a>
+            <a href="{% url 'set-availability' %}" class="btn btn-primary col-xs-2">Change Availability</a>
         {% else %}
-            <a href="{% url 'schedule-demo' %}" class="btn bg-primary col-xs-2">Schedule Demo</a>
+            <a href="{% url 'get-available-slots' %}" class="btn btn-primary col-xs-2">Schedule Demo</a>
         {% endif %}
 
         <a class="btn btn-danger col-xs-2" href="{% url 'logout' %}" onclick="signOut();">Sign out</a>
     </div>
     <div class="row">
         <h3 class="col-xs-12 text-center">
-            Below is the list of your demo schedules
+            -- Below is the list of your demo schedules --
         </h3>
+    </div>
+
+    <div class="row text-center">
+        {% if user.is_salesman %}
+            <h4 class="col-xs-4 bg-success">Customer Name</h4>
+        {% else %}
+            <h4 class="col-xs-4 bg-success">Salesman Name</h4>
+        {% endif %}
+
+        <h4 class="col-xs-4 bg-success">Date</h4>
+        <h4 class="col-xs-4 bg-success">Time</h4>
+
+        {% if schedules %}
+            {% for schedule in schedules %}
+                <p class="col-xs-4">
+                    {% if user.is_salesman %}
+                        {{ schedule.customer.name }}
+                    {% else %}
+                        {{ schedule.salesman.name }}
+                    {% endif %}
+                </p>
+                <p class="col-xs-4">{% convert_time schedule user 0 %}</p>
+                <p class="col-xs-4">{% convert_time schedule user 1 %}</p>
+            {% endfor %}
+
+        {% else %}
+            <h4 class="col-xs-12 text-center bg-danger">No Schedules Yet!!</h4>
+        {% endif %}
     </div>
 </div>
 <script src="https://apis.google.com/js/platform.js?onload=initGapi" async defer></script>
