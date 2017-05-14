@@ -245,9 +245,13 @@ def set_availability(request):
         if form.is_valid():
             site_user.timezone = form.cleaned_data['timezone']
             site_user.save()
+
+        # Parse the availability array given by user
         availability = json.loads(request.POST['availability-array'])
         Availability.objects.filter(salesman=site_user).delete()
         utc_date_time = convert_time(0, 0, site_user.timezone, "UTC")
+
+        # Insert Availability data into Database
         for available in availability:
             if available:
                 try:
@@ -295,7 +299,6 @@ flow.params['access_type'] = 'offline'  # offline access
 # flow.params['include_granted_scopes'] = True  # incremental auth
 
 
-
 @login_required
 def oauth2redirect(request):
     global flow
@@ -310,17 +313,23 @@ def oauth2redirect(request):
 @login_required
 def add_to_google_calender(request):
     site_user = SiteUser.objects.get(user=request.user)
+
+    # Get Credentials
     storage = Storage(SiteUser, 'user', request.user, 'credential')
     credential = storage.get()
+
+    # Validate them if invalid then authorize the request again
     if credential is None or credential.invalid:
         auth_uri = flow.step1_get_authorize_url()
         return HttpResponseRedirect(auth_uri)
 
+    # Get the service
     http = httplib2.Http()
     http_authorized = credential.authorize(http)
     service = build("calendar", "v3", http=http_authorized)
     schedule = Schedule.objects.filter(customer=site_user).order_by('sch_id').last()
 
+    # Event to be added
     event = {
         'summary': 'Demo Scheduled for Scribe',
         'location': 'Skype',
@@ -336,6 +345,10 @@ def add_to_google_calender(request):
             {'email': schedule.salesman.user.email},
         ],
     }
+
+    # Insert the Event
     event = service.events().insert(calendarId='primary', body=event).execute()
     schedule.event_link = event.get('htmlLink')
+
+    # Redirect to homepage
     return HttpResponseRedirect('/home')
