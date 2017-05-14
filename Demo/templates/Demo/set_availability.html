@@ -1,0 +1,117 @@
+{% load staticfiles %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta http-equiv="X-UA-COMPATIBLE" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Schedule_Demo</title>
+    <link rel="stylesheet" href="{% static 'css/bootstrap.css' %}">
+    <style>
+        .row{
+            margin-top: 10px;
+        }
+    </style>
+</head>
+<body>
+<div class="container">
+    <div class="row">
+        <div class="col-xs-12">
+            <h3 class="text-center">--- Select the time slots in which you are available provide a demo ---</h3>
+        </div>
+    </div>
+    <div class="row">
+        <form id="page-form" class="col-xs-12 text-center" action="{% url 'set-availability' %}" method="post"
+              onSubmit="appendData()">
+            {% csrf_token %}
+            {{ form.as_table }}
+            <button type="submit" class="btn btn-primary">Set Availability</button>
+            |
+            <a href="{% url 'home' %}" class="btn btn-success">Homepage</a>
+        </form>
+
+    </div>
+    <div id="time-slots" class="row text-center">
+
+    </div>
+
+    <div class="row text-center">
+        <div class="col-xs-6">
+            <button class="btn btn-default">Not Available</button>
+        </div>
+        <div class="col-xs-6">
+            <button class="btn btn-primary">Available</button>
+        </div>
+    </div>
+    <div class="row">
+        <p class="text-right">
+            ** You have to click set availability button to save the changes!!
+        </p>
+    </div>
+</div>
+<script>
+    var isSelected = [];
+    {% for foo in availability %}
+        console.log("{{ foo }}")
+        {% if foo %}
+            isSelected.push(true);
+        {% else %}
+            isSelected.push(false);
+        {% endif %}
+    {% endfor %}
+    console.log(isSelected);
+
+
+    var year = '';
+    var month = '';
+    var day = '';
+
+    var hour = '00';
+    var min = '00';
+
+    var time = new Date(year, month, day, hour, min);
+    slots = document.getElementById('time-slots');
+
+    for (var i = 0; i < 48; i++) {
+        var a = document.createElement('a');
+        if (isSelected[i])
+            a.setAttribute("class", "col-xs-3 btn btn-primary");
+        else
+            a.setAttribute("class", "col-xs-3 btn btn-default");
+        a.setAttribute("onclick", "toggleSlot(this)");
+        a.setAttribute("index", i);
+        addTime(time);
+        a.innerHTML += " - ";
+        time.setMinutes(time.getMinutes() + 30);
+        addTime(time);
+        slots.appendChild(a);
+
+    }
+
+    function addTime(time) {
+        if (time.getHours() < 10)
+            a.innerHTML += "0";
+        a.innerHTML += time.getHours() + ":" + time.getMinutes();
+        if (time.getMinutes() < 10)
+            a.innerHTML += "0";
+    }
+    function toggleSlot(node) {
+        var i = parseInt(node.getAttribute("index"));
+        if (isSelected[i]) {
+            node.setAttribute("class", "col-xs-3 btn btn-default");
+        } else {
+            node.setAttribute("class", "col-xs-3 btn btn-primary");
+        }
+        isSelected[i] = !isSelected[i];
+    }
+    function appendData() {
+        var form = document.getElementById("page-form");
+        var inp = document.createElement("input");
+        inp.setAttribute("type", "hidden");
+        inp.setAttribute("name", "availability-array")
+        inp.setAttribute("value", JSON.stringify(isSelected));
+        form.appendChild(inp);
+    }
+</script>
+</body>
+</html>

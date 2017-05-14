@@ -20,6 +20,7 @@
 
 
 <script>
+    var isLoggedInWithGoogle = false;
     function onSignIn(googleUser) {
         var profile = googleUser.getBasicProfile();
         var data = {};
@@ -28,27 +29,26 @@
         data['email'] = profile.getEmail();
         data['password'] = profile.getId();
         var form = document.createElement("form");
+        form.innerHTML = "{% csrf_token %}"
         form.setAttribute("method", "post");
         {% if is_salesman %}
             form.setAttribute("action", "http://localhost:8000/login/1");
         {% else %}
             form.setAttribute("action", "http://localhost:8000/login/0");
         {% endif %}
-        form.innerHTML = "{% csrf_token %}";
         for (var key in data) {
             if (data.hasOwnProperty(key)) {
                 var form_field = document.createElement("input");
                 form_field.setAttribute("type", "hidden");
                 form_field.setAttribute("name", key);
                 form_field.setAttribute("value", data[key]);
-
                 form.appendChild(form_field);
             }
         }
-
         document.body.appendChild(form);
         form.submit();
     }
+
 </script>
 </body>
 </html>

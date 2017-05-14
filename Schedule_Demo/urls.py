@@ -26,4 +26,6 @@ urlpatterns = [
     url(r'^login', TemplateView.as_view(template_name='Demo/login_redirect.html'), name='login-redirect'),
     url(r'^logout', views.logout, name='logout'),
     url(r'^home', views.home, name='home'),
+    url(r'^schedule-demo', views.schedule_demo, name='schedule-demo'),
+    url(r'^set-availability', views.set_availability, name='set-availability'),
 ]
