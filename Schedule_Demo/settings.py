@@ -24,7 +24,7 @@ SECRET_KEY = '=l@cxdjy38pfpv90m*nc!%bxh8&*u#8h*uoe1f7le1z_-^v%$n'
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
 
-ALLOWED_HOSTS = []
+ALLOWED_HOSTS = ['*']
 
 # Application definition
 
@@ -128,6 +128,6 @@ GOOGLE_CLIENT_ID = '326805507721-q9kmmtktvqjqsjfdmif836ih2njis70o.apps.googleuse
 GOOGLE_CLIENT_SECRET = 't1JlJkayhlBC0_O6tyrjBKao'
 GOOGLE_SCOPE = 'https://www.googleapis.com/auth/userinfo.email https://www.googleapis.com/auth/' \
                'userinfo.profile https://www.googleapis.com/auth/calendar'
-OAUTH_REDIRECT_URI = 'http://localhost:8000/save-credentials'
+OAUTH_REDIRECT_URI = 'http://cdf1fd5c.ngrok.io/save-credentials'
 
 GOOGLE_OAUTH2_CLIENT_SECRETS_JSON = 'client_secret.json'

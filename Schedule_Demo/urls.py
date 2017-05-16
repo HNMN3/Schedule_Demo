@@ -24,7 +24,7 @@ urlpatterns = [
     url(r'^customer', views.CustomerSignInView.as_view(), name='customer_login'),
     url(r'^salesman', views.SalesmanSignInView.as_view(), name='salesman_login'),
     url(r'^login/([0-1])', views.login, name='login'),
-    url(r'^login', TemplateView.as_view(template_name='Demo/login_redirect.html'), name='login-redirect'),
+    url(r'^', TemplateView.as_view(template_name='Demo/login_redirect.html'), name='login-redirect'),
     url(r'^logout', views.logout, name='logout'),
     url(r'^home', views.home, name='home'),
     url(r'^schedule-demo', views.schedule_demo, name='schedule-demo'),

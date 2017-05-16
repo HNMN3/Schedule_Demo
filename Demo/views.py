@@ -34,6 +34,30 @@ from oauth2client.contrib.django_util.storage import DjangoORMStorage as Storage
 
 # All time instances are converted to UTC timezone before performing any task so that all timezone can be compared
 
+
+
+class BaseView(TemplateView):
+    # Just leveraging the Inheritance feature by defining the common data and function here
+    template_name = 'Demo/sign-in.html'
+    is_salesman = None
+
+    def dispatch(self, request, *args, **kwargs):
+        # Check if already user is logged in then directly go to home
+        if request.user.is_authenticated():
+            return HttpResponseRedirect('/home')
+        return render(request, self.template_name, {'is_salesman': self.is_salesman})
+
+
+# Below two View are for differentiating between salesman and customer
+class SalesmanSignInView(BaseView):
+    is_salesman = 1  # SignIn view for salesman
+
+
+class CustomerSignInView(BaseView):
+    is_salesman = 0  # SignIn view for customer
+
+
+# This method logs in the request and also creates the User account if it's the very first time user logging in
 def login(request, is_salesman):
     if request.method == "POST":
         try:
@@ -58,7 +82,7 @@ def login(request, is_salesman):
             # create SiteUser instance
             SiteUser.objects.create(**data)
 
-        # Authenticate the user
+        # Authenticate the request i.e. log it in
         username = user.username
         password = request.POST['password']
         user = authenticate(username=username, password=password)
@@ -90,27 +114,6 @@ def home(request):
                                               'schedules': schedules})
 
 
-class BaseView(TemplateView):
-    # Just leveraging the Inheritance feature by defining the common data and function here
-    template_name = 'Demo/sign-in.html'
-    is_salesman = None
-
-    def dispatch(self, request, *args, **kwargs):
-        # Check if already user is logged in then directly go to home
-        if request.user.is_authenticated():
-            return HttpResponseRedirect('/home')
-        return render(request, self.template_name, {'is_salesman': self.is_salesman})
-
-
-# Below two View are for differentiating between salesman and customer
-class SalesmanSignInView(BaseView):
-    is_salesman = 1  # SignIn view for salesman
-
-
-class CustomerSignInView(BaseView):
-    is_salesman = 0  # SignIn view for customer
-
-
 def logout(request):
     # Logout the request
     site_user = SiteUser.objects.get(user=request.user)
@@ -136,19 +139,6 @@ def any_salesman_available(on_this_date_time):
     return available_salesman
 
 
-def get_salesman_demo_count(salesman_pk, date):
-    # To get the number of how many demo are scheduled with the given salesman
-    salesman = SiteUser.objects.get(pk=salesman_pk['salesman'])
-
-    # Creates the one if not exist
-    try:
-        demo_count = DemoCount.objects.get(salesman=salesman, date=date)
-    except DemoCount.DoesNotExist:
-        demo_count = DemoCount.objects.create(salesman=salesman, date=date)
-
-    return demo_count
-
-
 @login_required
 def get_available_slots(request):
     site_user = SiteUser.objects.get(user=request.user)
@@ -167,7 +157,7 @@ def get_available_slots(request):
         form = ScheduleForm(data)
         utc_date_time = convert_time(0, 0, site_user.timezone, "UTC", datetime.datetime.now().date())
 
-    # Loop through all the 48 timeslots of a day and check if atleast one salesman is available on that
+    # Loop through all the 48 time slots of a day and check if atleast one salesman is available on that
     delta = datetime.timedelta(minutes=30)  # Duration of demo
     availability = []
     current_time = datetime.datetime.utcnow().replace(tzinfo=pytz.utc)
@@ -179,6 +169,19 @@ def get_available_slots(request):
         utc_date_time += delta
 
     return render(request, 'Demo/schedule_demo.html', {'form': form, 'availability': availability})
+
+
+def get_salesman_demo_count(salesman_pk, date):
+    # To get the number of how many demo are scheduled with the given salesman on given date
+    salesman = SiteUser.objects.get(pk=salesman_pk['salesman'])
+
+    # Creates the one if not exist
+    try:
+        demo_count = DemoCount.objects.get(salesman=salesman, date=date)
+    except DemoCount.DoesNotExist:
+        demo_count = DemoCount.objects.create(salesman=salesman, date=date)
+
+    return demo_count
 
 
 @login_required
@@ -200,10 +203,10 @@ def schedule_demo(request):
         demo_counts = [get_salesman_demo_count(salesman, utc_datetime.date()) for salesman in available_salesman]
 
         # Schedule the demo with the one who has the lowest number of Demo scheduled
-        min_demo_count = min(demo_counts, key=lambda x: x.demo_count)
-        min_demo_count.demo_count += 1
-        min_demo_count.save()
-        s = Schedule.objects.create(customer=site_user, salesman=min_demo_count.salesman,
+        salesman_with_min_demo_count = min(demo_counts, key=lambda x: x.demo_count)
+        salesman_with_min_demo_count.demo_count += 1
+        salesman_with_min_demo_count.save()
+        s = Schedule.objects.create(customer=site_user, salesman=salesman_with_min_demo_count.salesman,
                                     schedule_date_time=utc_datetime)
 
         # Now redirect to view which inserts this schedule into calender
@@ -213,13 +216,13 @@ def schedule_demo(request):
     return HttpResponse("OOPS!! Nothing is here please goto homepage!!")
 
 
-def convert_time(hour, minute, input, output, date=None):
+def convert_time(hour, minute, input_timezone, output_timezone, date=None):
     '''
     This method converts a particular time into another timezone ex. UTC to Asia/Kolkata
     :return: the converted time object
     '''
-    input_time_zone = pytz.timezone(input)
-    output_time_zone = pytz.timezone(output)
+    input_time_zone = pytz.timezone(input_timezone)
+    output_time_zone = pytz.timezone(output_timezone)
     if date is None:
         date = datetime.datetime.now().date()
     time = datetime.time(hour, minute)
@@ -304,10 +307,13 @@ def oauth2redirect(request):
     global flow
     # It is called after user allows the calender permission
     # stores the credentials and redirects to next
-    credential = flow.step2_exchange(request.GET['code'])
-    storage = Storage(SiteUser, 'user', request.user, 'credential')
-    storage.put(credential)
-    return HttpResponseRedirect('/add-to-calendar')
+    try:
+        credential = flow.step2_exchange(request.GET['code'])
+        storage = Storage(SiteUser, 'user', request.user, 'credential')
+        storage.put(credential)
+        return HttpResponseRedirect('/add-to-calendar')
+    except Exception as e:
+        return HttpResponseRedirect('/home')
 
 
 @login_required
