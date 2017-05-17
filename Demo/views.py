@@ -2,23 +2,27 @@ import datetime
 
 import pickle
 import pytz
+import requests
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth.models import User
+from django.db.models import Q
 from django.http import HttpResponse
 from django.http import HttpResponseRedirect
 from django.shortcuts import render
 from django.contrib.auth import login as auth_login, logout as auth_logout, authenticate
 # Create your views here.
 from django.urls import reverse
+from django.views.decorators.csrf import csrf_exempt
 from django.views.generic import TemplateView
 import json
 
+from dateutil.parser import parse
 from googleapiclient.discovery import build
 from oauth2client import client
 from oauth2client.client import OAuth2WebServerFlow, flow_from_clientsecrets
 
 from Demo.forms import ScheduleForm, SetAvailabilityForm
-from Demo.models import SiteUser, Schedule, TimeSlot, Availability, DemoCount
+from Demo.models import SiteUser, Schedule, TimeSlot, Availability, DemoCount, EventFromOtherSources
 import httplib2
 from django.conf import settings
 from django.contrib.auth import login as auth_login
@@ -33,7 +37,6 @@ from oauth2client.contrib.django_util.storage import DjangoORMStorage as Storage
 
 
 # All time instances are converted to UTC timezone before performing any task so that all timezone can be compared
-
 
 
 class BaseView(TemplateView):
@@ -73,8 +76,8 @@ def login(request, is_salesman):
             user.save()
 
             # removing unnecessary data
-            data.pop('csrfmiddlewaretoken')
-
+            data.pop('csrfmiddlewaretoken', 0)
+            data.pop('img_url', 0)
             # Adding required data to crete SiteUser instance
             data['is_salesman'] = is_salesman == "1"
             data['user'] = user
@@ -87,7 +90,7 @@ def login(request, is_salesman):
         password = request.POST['password']
         user = authenticate(username=username, password=password)
         auth_login(request, user)
-        return HttpResponseRedirect('/save-credentials')
+        return HttpResponseRedirect('/get-calendar-permission')
 
     return HttpResponse("You are not allowed to access this page directly!!")
 
@@ -128,8 +131,13 @@ def logout(request):
 def any_salesman_available(on_this_date_time):
     # In this function I am first getting salesman who provided their availability on this time slot
     # and then I am removing them who are scheduled
+    start_time = on_this_date_time
+    end_time = on_this_date_time + datetime.timedelta(minutes=30)
     salesman_on_this_slot = Availability.objects.filter(slot__slot_time=on_this_date_time.time()).values('salesman')
-    booked_salesman = Schedule.objects.filter(schedule_date_time=on_this_date_time).values('salesman')
+    booked_salesman = EventFromOtherSources.objects.filter(
+        (Q(start_time__lte=start_time) & Q(end_time__gt=start_time)) |
+        (Q(start_time__lt=end_time) & Q(end_time__gte=end_time))
+    ).values('salesman')
 
     available_salesman = []
     for salesman in salesman_on_this_slot:
@@ -210,6 +218,7 @@ def schedule_demo(request):
                                     schedule_date_time=utc_datetime)
 
         # Now redirect to view which inserts this schedule into calender
+        request.session['sch_id'] = s.sch_id
         return HttpResponseRedirect('/add-to-calendar')
 
     # Allows only post request
@@ -307,13 +316,10 @@ def oauth2redirect(request):
     global flow
     # It is called after user allows the calender permission
     # stores the credentials and redirects to next
-    try:
-        credential = flow.step2_exchange(request.GET['code'])
-        storage = Storage(SiteUser, 'user', request.user, 'credential')
-        storage.put(credential)
-        return HttpResponseRedirect('/add-to-calendar')
-    except Exception as e:
-        return HttpResponseRedirect('/home')
+    credential = flow.step2_exchange(request.GET['code'])
+    storage = Storage(SiteUser, 'user', request.user, 'credential')
+    storage.put(credential)
+    return HttpResponseRedirect(request.session.pop('redirect_url'))
 
 
 @login_required
@@ -327,13 +333,14 @@ def add_to_google_calender(request):
     # Validate them if invalid then authorize the request again
     if credential is None or credential.invalid:
         auth_uri = flow.step1_get_authorize_url()
+        request.session['redirect_url'] = '/add-to-calendar'
         return HttpResponseRedirect(auth_uri)
 
     # Get the service
     http = httplib2.Http()
     http_authorized = credential.authorize(http)
     service = build("calendar", "v3", http=http_authorized)
-    schedule = Schedule.objects.filter(customer=site_user).order_by('sch_id').last()
+    schedule = Schedule.objects.get(sch_id=request.session.pop('sch_id'))
 
     # Event to be added
     event = {
@@ -358,3 +365,127 @@ def add_to_google_calender(request):
 
     # Redirect to homepage
     return HttpResponseRedirect('/home')
+
+
+@login_required
+def test(request):
+    site_user = SiteUser.objects.get(user=request.user)
+    storage = Storage(SiteUser, 'user', request.user, 'credential')
+    credential = storage.get()
+    if credential is None or credential.invalid:
+        auth_uri = flow.step1_get_authorize_url()
+        request.session['redirect_url'] = '/test'
+        return HttpResponseRedirect(auth_uri)
+    print(credential.get_access_token().access_token)
+    return HttpResponse('<br>'.join(dir(credential.get_access_token())))
+
+
+@login_required
+def get_calendar_permission(request):
+    site_user = SiteUser.objects.get(user=request.user)
+    storage = Storage(SiteUser, 'user', request.user, 'credential')
+    credential = storage.get()
+    if credential is None or credential.invalid \
+            or credential.id_token['email'] != site_user.user.email:
+        auth_uri = flow.step1_get_authorize_url()
+        request.session['redirect_url'] = '/get-calendar-permission'
+        return HttpResponseRedirect(auth_uri)
+
+    if site_user.is_salesman and not site_user.notification_enabled:
+        # Get the service
+        http = httplib2.Http()
+        http_authorized = credential.authorize(http)
+        service = build("calendar", "v3", http=http_authorized)
+        next_page_token = None
+        while True:
+            event_request = service.events().list(
+                calendarId='primary',
+                singleEvents=True,
+                orderBy='startTime',
+                maxResults=10,
+                pageToken=next_page_token
+            )
+            event_results = event_request.execute()
+            events = event_results.get('items', [])
+            for event in events:
+                try:
+                    event_model = EventFromOtherSources.objects.get(event_id=event['id'])
+                except EventFromOtherSources.DoesNotExist:
+                    start_time = parse(event['start']['dateTime'])
+                    end_time = parse(event['end']['dateTime'])
+                    event_model = EventFromOtherSources.objects.create(
+                        event_id=event['id'],
+                        salesman=site_user,
+                        start_time=start_time - start_time.utcoffset(),
+                        end_time=end_time - end_time.utcoffset()
+                    )
+            next_page_token = event_results.get('nextPageToken')
+
+            if next_page_token is None:
+                break
+
+        email = site_user.user.email
+        url = 'https://www.googleapis.com/calendar/v3/calendars/{email}/events/watch'.format(email=email)
+
+        headers = {
+            'Content-Type': 'application/json',
+            'Authorization': 'Bearer ' + credential.get_access_token().access_token
+        }
+        data = {
+            'id': 'notification-channel-id-for-' + email[:email.index('@')].replace('.', '-'),
+            "type": "web_hook",
+            "address": "https://cdf1fd5c.ngrok.io/notifications"
+        }
+        res = requests.post(url, data=json.dumps(data), headers=headers)
+        site_user.notification_channel_id = data['id']
+        site_user.notification_enabled = True
+        site_user.save()
+
+    return HttpResponseRedirect('/home')
+
+
+@csrf_exempt
+def notifications(request):
+    channel_id = request.META['HTTP_X_GOOG_CHANNEL_ID']
+    try:
+        site_user = SiteUser.objects.get(notification_channel_id=channel_id)
+    except SiteUser.DoesNotExist:
+        print('Error')
+        print(request.META)
+        return HttpResponse(status=200)
+    storage = Storage(SiteUser, 'user', site_user.user, 'credential')
+    credential = storage.get()
+
+    # Get the service
+    http = httplib2.Http()
+    http_authorized = credential.authorize(http)
+    service = build("calendar", "v3", http=http_authorized)
+    next_page_token = None
+    while True:
+        event_request = service.events().list(
+            calendarId='primary',
+            singleEvents=True,
+            orderBy='startTime',
+            maxResults=10,
+            pageToken=next_page_token
+        )
+        event_results = event_request.execute()
+        events = event_results.get('items', [])
+        for event in events:
+            try:
+                event_model = EventFromOtherSources.objects.get(event_id=event['id'])
+            except EventFromOtherSources.DoesNotExist:
+                start_time = parse(event['start']['dateTime'])
+                end_time = parse(event['end']['dateTime'])
+                event_model = EventFromOtherSources.objects.create(
+                    event_id=event['id'],
+                    salesman=site_user,
+                    start_time=start_time - start_time.utcoffset(),
+                    end_time=end_time - end_time.utcoffset()
+                )
+        next_page_token = event_results.get('nextPageToken')
+
+        if next_page_token is None:
+            break
+
+    return HttpResponse(status=200)

@@ -14,10 +14,11 @@ class SiteUser(models.Model):
     user = models.OneToOneField(User, on_delete=models.CASCADE)  # Using Django default model for authentication
     credential = CredentialsField()
     name = models.CharField(max_length=50)
-    img_url = models.TextField()
     # user type can be either salesman or customer so used boolean field
     is_salesman = models.BooleanField(choices=[(True, 'yes'), (False, 'no')])
     timezone = models.CharField(max_length=50, default="UTC")
+    notification_enabled = models.BooleanField(default=False)
+    notification_channel_id = models.TextField(unique=True, blank=True, null=True)
 
     def __str__(self):
         return self.name
@@ -50,3 +51,11 @@ class DemoCount(models.Model):
     salesman = models.ForeignKey(SiteUser, on_delete=models.CASCADE)
     date = models.DateField()
     demo_count = models.IntegerField(default=0)
+
+
+# It will keep track of all the events returned from google calender of the salesman
+class EventFromOtherSources(models.Model):
+    event_id = models.TextField(primary_key=True)
+    salesman = models.ForeignKey(SiteUser, on_delete=models.CASCADE)
+    start_time = models.DateTimeField()
+    end_time = models.DateTimeField()
