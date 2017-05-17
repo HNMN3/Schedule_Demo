@@ -367,21 +367,10 @@ def add_to_google_calender(request):
     return HttpResponseRedirect('/home')
 
 
-@login_required
-def test(request):
-    site_user = SiteUser.objects.get(user=request.user)
-    storage = Storage(SiteUser, 'user', request.user, 'credential')
-    credential = storage.get()
-    if credential is None or credential.invalid:
-        auth_uri = flow.step1_get_authorize_url()
-        request.session['redirect_url'] = '/test'
-        return HttpResponseRedirect(auth_uri)
-    print(credential.get_access_token().access_token)
-    return HttpResponse('<br>'.join(dir(credential.get_access_token())))
-
 
 @login_required
 def get_calendar_permission(request):
+    # This method gets the calendar access permission as soon as user log in
     site_user = SiteUser.objects.get(user=request.user)
     storage = Storage(SiteUser, 'user', request.user, 'credential')
     credential = storage.get()
@@ -392,6 +381,7 @@ def get_calendar_permission(request):
         return HttpResponseRedirect(auth_uri)
 
     if site_user.is_salesman and not site_user.notification_enabled:
+        # if user is sales man then get all data from calendar and enable the push notifications
         # Get the service
         http = httplib2.Http()
         http_authorized = credential.authorize(http)
@@ -424,6 +414,7 @@ def get_calendar_permission(request):
             if next_page_token is None:
                 break
 
+        # Enable the push notifications
         email = site_user.user.email
         url = 'https://www.googleapis.com/calendar/v3/calendars/{email}/events/watch'.format(email=email)
 
@@ -437,6 +428,8 @@ def get_calendar_permission(request):
             "address": "https://cdf1fd5c.ngrok.io/notifications"
         }
         res = requests.post(url, data=json.dumps(data), headers=headers)
+
+        # save channel id
         site_user.notification_channel_id = data['id']
         site_user.notification_enabled = True
         site_user.save()
@@ -446,13 +439,16 @@ def get_calendar_permission(request):
 
 @csrf_exempt
 def notifications(request):
+    # channel id to find for which salesman it is
     channel_id = request.META['HTTP_X_GOOG_CHANNEL_ID']
     try:
         site_user = SiteUser.objects.get(notification_channel_id=channel_id)
     except SiteUser.DoesNotExist:
-        print('Error')
-        print(request.META)
+        # As I was trying accounts again and again so I created some channels on which no user is attached
+        # but google is sending data so ignoring that
         return HttpResponse(status=200)
+
+    # get credential
     storage = Storage(SiteUser, 'user', site_user.user, 'credential')
     credential = storage.get()
 
@@ -461,6 +457,8 @@ def notifications(request):
     http_authorized = credential.authorize(http)
     service = build("calendar", "v3", http=http_authorized)
     next_page_token = None
+
+    # Get the events of calendar
     while True:
         event_request = service.events().list(
             calendarId='primary',
@@ -472,6 +470,7 @@ def notifications(request):
         event_results = event_request.execute()
         events = event_results.get('items', [])
         for event in events:
+            # Add to database if not exist
             try:
                 event_model = EventFromOtherSources.objects.get(event_id=event['id'])
             except EventFromOtherSources.DoesNotExist:
@@ -485,6 +484,7 @@ def notifications(request):
                 )
         next_page_token = event_results.get('nextPageToken')
 
+        # break when data finishes
         if next_page_token is None:
             break
 
